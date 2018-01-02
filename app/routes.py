@@ -1,8 +1,8 @@
 # -*- encoding: utf-8 -*-
 from flask import render_template, flash, redirect, url_for,request
 from flask_login import current_user,login_user,logout_user,login_required
-from app import app
-from app.forms import LoginForm
+from app import app,db
+from app.forms import LoginForm,RegistrationForm
 from app.models import User
 
 @app.route('/')
@@ -33,6 +33,7 @@ def login():
             flash("invalid username or password.")
             return redirect(url_for('login'))
         # rememberするか否かをチェックボックスから取得
+        # login_user()を実行することで、この先current_user変数にユーザーの情報がセットされる
         login_user(user,remember=form.remember_me.data)
 
         """
@@ -55,3 +56,34 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for("index"))
+
+@app.route("/register",methods=["GET","POST"])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        user = User(username=form.username.data,email=form.email.data)
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash("Congratulations, you are now a registered user!")
+        return redirect(url_for("login"))
+    return render_template("register.html",title="Register",form=form)
+
+"""
+@app.routeデコレータは変数を含むことが可能。<>で括る
+ex) /user/susanとした場合、usernameに"susan"がセットされる
+"""
+@app.route('/user/<username>')
+@login_required
+def user(username):
+    """
+    first_or_404()：クエリの結果が存在しなければ404エラーを送出する
+    """
+    user = User.query.filter_by(username=username).first_or_404()
+    posts = [
+        dict(author=user,body="Test post #1"),
+        dict(author=user,body="Test post #2")
+    ]
+    return render_template("user.html",user=user,posts=posts)
