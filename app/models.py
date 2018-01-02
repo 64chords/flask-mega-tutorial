@@ -5,7 +5,10 @@ from hashlib import md5
 from flask_login import UserMixin
 from app import db,login
 
-
+"""
+current_user変数を参照した際に
+呼ばれるコールバック関数
+"""
 @login.user_loader
 def load_user(id):
     return User.query.get(int(id))
