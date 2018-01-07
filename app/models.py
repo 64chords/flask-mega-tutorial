@@ -13,6 +13,13 @@ current_user変数を参照した際に
 def load_user(id):
     return User.query.get(int(id))
 
+# フォロワー補助テーブル モデルの概念が不要のためクラスは作成しない
+followers = db.Table(
+    "followers",
+    db.Column("follower_id",db.Integer,db.ForeignKey("user.id")),
+    db.Column("followed_id",db.Integer,db.ForeignKey("user.id"))
+)
+
 class User(UserMixin,db.Model):
     id = db.Column(db.Integer,primary_key=True)
     username = db.Column(db.String(64),index=True,unique=True)
@@ -25,6 +32,19 @@ class User(UserMixin,db.Model):
     is used as a convenient way to get access to the “many”.
     """
     posts = db.relationship("Post",backref="author",lazy="dynamic")
+    """
+    フォロー・フォロワーの関係を追加
+    "User": セルフ参照の関係なので自分自身
+    secondary: 関係性を表す関係テーブル
+    followers.c.**: cはColumnsを表すプロパティ
+    詳細はp.134~135を参照のこと（８．３節）
+    """
+    followed = db.relationship(
+        "User",secondary=followers,
+        primaryjoin=(followers.c.follower_id == id),
+        secondaryjoin=(followers.c.followed_id == id),
+        backref=db.backref("followers",lazy="dynamic"),lazy="dynamic"
+    )
 
     def set_password(self,password):
         self.password_hash = generate_password_hash(password)
@@ -34,12 +54,45 @@ class User(UserMixin,db.Model):
 
     def avatar(self,size):
         """
-        gravatar.comよりemaliのハッシュをキーとして
+        gravatar.comよりemailのハッシュをキーとして
         identiconの画像をGETするURLを生成
         """
         digest = md5(self.email.lower().encode('utf-8')).hexdigest()
         return "https://www.gravatar.com/avatar/{}?d=identicon&s={}".\
             format(digest,size)
+
+    def follow(self,user):
+        if not self.is_following(user):
+            self.followed.append(user)
+
+    def unfollow(self,user):
+        if self.is_following(user):
+            self.followed.remove(user)
+
+    def is_following(self,user):
+        """
+        filter()とfilter_by()の違い：
+            filter_by:上級。カラム名との一致を見る
+            filter:低級。任意の条件を使用できる。一定値との比較のみ可
+        """
+        # followersテーブルのfollow_idカラムと、ユーザーIDが一致する個数をカウント
+        return self.followed.filter(
+            followers.c.followed_id == user.id).count() > 0
+
+    def followed_posts(self):
+        """
+        フォローしてる人のポストを取得
+        詳細は8.6.1節(pp.142〜)を参照
+        """
+        #フォローしてる人のポスト
+        followed = Post.query.join(
+            followers,(followers.c.followed_id == Post.user_id)).filter(
+                followers.c.follower_id == self.id)
+        #自分自身のポスト
+        own = Post.query.filter_by(user_id=self.id)
+        #結合し、時系列に並べ替え
+        return followed.union(own).order_by(Post.timestamp.desc())
+
 
     def __repr__(self):
         return "<User {}>".format(self.username)
