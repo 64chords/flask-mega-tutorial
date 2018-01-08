@@ -20,3 +20,5 @@ class Config():
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
     #リスト内のアドレス全員に送信される
     ADMINS = ["tmgf.15.su@gmail.com"]
+    # 1ページあたりに表示するポスト数
+    POSTS_PER_PAGE = 25
